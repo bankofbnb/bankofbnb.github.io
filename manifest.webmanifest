@@ -1,0 +1,14 @@
+{
+  "name": "Bank of B&B",
+  "short_name": "B&B",
+  "description": "Our payday plan, budgets and reminders.",
+  "start_url": "./#today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f1",
+  "theme_color": "#0f5a4f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

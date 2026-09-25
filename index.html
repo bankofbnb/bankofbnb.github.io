@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bank of B&amp;B</title>
+<meta name="description" content="Our payday plan, budgets and reminders.">
+<meta name="theme-color" content="#0f5a4f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="B&amp;B">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">B&amp;B</span>
+      <div>
+        <div class="brand-name">Bank of B&amp;B</div>
+        <div class="brand-sub" id="subline">Payday plan</div>
+      </div>
+    </div>
+    <button class="who-btn" id="whoBtn" type="button" aria-label="Switch person">—</button>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main id="view" tabindex="-1"></main>
+</div>
+
+<nav class="tabs" aria-label="Sections">
+  <button type="button" data-tab="today" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM4 9h16M9 3v4M15 3v4"/></svg><span>Today</span></button>
+  <button type="button" data-tab="plan" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9"/></svg><span>Plan</span></button>
+  <button type="button" data-tab="spend" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M8 8.5c0-1.7 1.8-2.5 4-2.5s4 .9 4 2.6c0 3.9-8 2.3-8 6.4 0 1.8 1.8 3 4 3s4-.8 4-2.5"/></svg><span>Spending</span></button>
+  <button type="button" data-tab="cards" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 10h18M7 15h4"/></svg><span>Cards</span></button>
+  <button type="button" data-tab="settings" class="tab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></svg><span>Alerts</span></button>
+</nav>
+
+<div class="modal-wrap" id="modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle"></h2>
+    <div id="modalBody"></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
