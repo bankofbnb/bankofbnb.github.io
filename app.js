@@ -163,6 +163,8 @@
 
     if (al.length) h += '<section class="section">' + al.map(a => '<div class="alert ' + a.level + '"><div><b>' + esc(a.title) + '</b><span>' + esc(a.text) + '</span></div></div>').join('') + '</section>';
 
+    (plan.trips || []).filter(tr => tr.end >= t).forEach(tr => { h += tripCard(tr); });
+
     // overdue first
     const overdue = sum.overdue.slice(0, 2);
     overdue.forEach(ev => { h += eventCard(ev, 'Still to do'); });
@@ -184,7 +186,7 @@
 
     // this week's notes
     const soon = events.filter(ev => ev.kind === 'note' && daysUntil(ev.date) >= 0 && daysUntil(ev.date) <= 21);
-    soon.forEach(ev => { h += '<div class="card flat"><div class="row"><b>' + esc(ev.title) + '</b><span class="chip both">' + esc(B.nice(ev.date)) + ' · ' + whenText(ev.date) + '</span></div>' + (ev.text ? '<p class="muted small" style="margin:6px 0 0">' + esc(ev.text) + '</p>' : '') + '</div>'; });
+    if (soon.length) h += '<section class="section"><h3>Coming up</h3>' + soon.map(ev => '<div class="card flat"><div class="row"><b>' + esc(ev.title) + '</b><span class="chip ' + whoClass(ev.who) + '">' + esc(B.nice(ev.date)) + ' · ' + whenText(ev.date) + '</span></div>' + (ev.text ? '<p class="muted small" style="margin:6px 0 0">' + esc(ev.text) + '</p>' : '') + (ev.trip ? '<button type="button" class="btn ghost small" data-go="trip" style="margin-top:6px;padding-left:0">Open trip plan →</button>' : '') + '</div>').join('') + '</section>';
     return h;
   }
 
@@ -204,7 +206,67 @@
     const cls = pct > 1 ? 'bad' : pct >= 0.85 ? 'warn' : '';
     return '<div class="meter"><div class="meter-top"><span class="meter-name">' + esc(b.label) + ' <span class="chip ' + whoClass(b.who) + '">' + esc(b.who) + '</span></span><span class="meter-val">' + money(b.spent) + ' of ' + money(b.monthly) + '</span></div>' +
       '<div class="bar ' + cls + '"><i style="width:' + Math.min(100, pct * 100) + '%"></i></div>' +
-      '<div class="meter-note ' + cls + '">' + (b.spent > b.monthly ? money(b.spent - b.monthly) + ' over budget' : money(b.monthly - b.spent) + ' left') + '</div></div>';
+      '<div class="meter-note ' + cls + '">' + (b.spent > b.monthly ? money(b.spent - b.monthly) + ' over budget' : money(b.monthly - b.spent) + ' left') + '</div>' + (b.note ? '<div class="meter-note">' + esc(b.note) + '</div>' : '') + '</div>';
+  }
+
+  // ---------- trips ----------
+  function tripDates(tr) { return B.nice(tr.start) + ' – ' + B.nice(tr.end); }
+  function tripCard(tr) {
+    const st = B.tripStatus(plan, state, tr, today());
+    const when = st.phase === 'before' ? (st.days === 1 ? 'Starts tomorrow' : 'Starts in ' + st.days + ' days') : st.phase === 'during' ? 'Happening now' : 'Finished';
+    return '<section class="card trip-card"><div class="row"><div><h3>Trip</h3><div class="event-date" style="margin-top:6px">' + esc(tr.name) + '</div><div class="event-meta">' + esc(tripDates(tr)) + ' · ' + when + '</div></div>' +
+      '<span class="chip ' + (st.done === st.count ? 'good' : 'muted') + '">' + st.done + ' of ' + st.count + ' paid</span></div>' +
+      '<div class="progress" style="margin-top:12px"><i style="width:' + (100 * st.done / st.count) + '%"></i></div>' +
+      '<button type="button" class="btn" data-go="trip" style="margin-top:12px;width:100%">Open trip plan</button></section>';
+  }
+  function viewTrip() {
+    const t = today();
+    const tr = (plan.trips || []).filter(x => x.end >= t)[0] || (plan.trips || []).slice(-1)[0];
+    if (!tr) return '<div class="card empty">No trips planned.</div>';
+    const st = B.tripStatus(plan, state, tr, t);
+    let h = '<section><button type="button" class="btn ghost small" data-go="plan" style="padding-left:0">← Plan</button><h1>' + esc(tr.name) + '</h1><p class="lead">' + esc(tripDates(tr)) + '</p></section>';
+    h += '<div class="verdict"><b>Can we afford it?</b><span>' + esc(tr.verdict) + '</span></div>';
+
+    // 1. what it costs
+    h += '<section class="card"><div class="row"><h2>1. What it costs</h2><span class="meter-val">' + money(st.paid) + ' of ' + money(st.total) + ' paid</span></div>' +
+      '<p class="small muted" style="margin:4px 0 0">Tick each one when it\'s paid.</p><ul class="steps">' +
+      st.items.map(it => '<li><button type="button" class="step' + (it.done ? ' done' : '') + '" data-trip="' + esc(tr.key) + '" data-trip-item="' + esc(it.key) + '" aria-pressed="' + it.done + '"><span class="box">' + check + '</span>' +
+        '<span class="label">' + esc(it.label) + '<span class="hint"><span class="chip ' + whoClass(it.who) + '">' + esc(it.who) + '</span> · ' + esc(it.when) + ' · ' + esc(it.from) + '</span></span><span class="amt">' + money(it.amount) + '</span></button></li>').join('') +
+      '</ul><div class="trip-total"><span>Total trip cost</span><b>' + money(st.total) + '</b></div></section>';
+
+    // 2. timeline
+    const tl = [{ date: t < tr.start ? t : tr.start, title: 'Now', text: 'Buy the ferry tickets ($119) with your spare money.', who: 'Prithvi', now: true }]
+      .concat(events.filter(ev => ev.date >= B.addDays(tr.start, -6) && ev.date <= tr.end && (ev.trip === tr.key || (ev.kind === 'payday' && ev.steps.some(s => s.key === 'tripgas')))).map(ev => ({ date: ev.date, who: ev.who, title: ev.kind === 'payday' ? ev.who + '\'s payday' : ev.title, text: ev.kind === 'payday' ? (ev.steps.some(s => s.key === 'tripgas') ? 'Set aside $164 trip gas and buy the $44 Hullo ticket from this paycheck.' : 'Normal payday steps. Her $350 set-aside pays off the trip spending on her card.') : ev.text })));
+    h += '<section class="card"><h2>2. Day by day</h2><ol class="timeline">' + tl.map(x => '<li' + (x.date === t ? ' class="today"' : x.date < t && !x.now ? ' class="past"' : '') + '><span class="tl-date">' + (x.now ? 'Now' : esc(B.nice(x.date))) + '</span><div><b>' + esc(x.title) + '</b> <span class="chip ' + whoClass(x.who) + '">' + esc(x.who) + '</span><p>' + esc(x.text || '') + '</p></div></li>').join('') + '</ol></section>';
+
+    // 3. spending during the trip
+    h += '<section class="card stack"><h2>3. Spending on the trip</h2><p class="small muted" style="margin:-8px 0 0">Log each purchase so you know what\'s left.</p>' + st.budgets.map(budgetMeter).join('') +
+      '<div class="btns">' + st.budgets.map(b => '<button type="button" class="btn secondary small" data-logcat="' + esc(b.key) + '" data-logwho="' + esc(b.who) + '">Log ' + esc(b.label) + '</button>').join('') + '</div></section>';
+
+    // 4. rules
+    h += '<section class="card"><h2>4. Rules for the trip</h2><ul class="ol">' + (tr.rules || []).map(r => '<li>' + esc(r) + '</li>').join('') + '</ul></section>';
+
+    // 5. impact
+    h += '<section class="card"><h2>5. What it changes</h2><div class="table-wrap"><table class="impact"><thead><tr><th></th><th>Without trip</th><th>With trip</th></tr></thead><tbody>' +
+      (tr.impact || []).map(r => '<tr><td>' + esc(r.label) + '</td><td>' + money(r.before) + '</td><td class="' + (r.after < r.before ? 'down' : '') + '">' + money(r.after) + '</td></tr>').join('') +
+      '</tbody></table></div>' + (tr.impactNote ? '<p class="small muted" style="margin:10px 0 0">' + esc(tr.impactNote) + '</p>' : '') + '</section>';
+    return h;
+  }
+  async function toggleTripItem(key, itemKey) {
+    const tr = (plan.trips || []).find(x => x.key === key); if (!tr) return;
+    const it = tr.items.find(x => x.key === itemKey); if (!it) return;
+    const st = B.tripStatus(plan, state, tr, today());
+    const was = st.items.find(x => x.key === itemKey).done;
+    if (!was) {
+      const ok = await modal('Paid: ' + it.label + '?', '<p><b>' + money(it.amount) + '</b> · ' + esc(it.who) + '</p><p class="muted">' + esc(it.from) + '</p>', [{ label: 'Not yet', cls: 'secondary', value: false }, { label: 'Yes, paid', value: true }]);
+      if (!ok) return;
+    }
+    const tid = 'trip|' + key;
+    await mutate(stt => {
+      stt.done[tid] = stt.done[tid] || {};
+      if (was) { delete stt.done[tid][itemKey]; if (it.step) { const [e, k] = it.step.split(':'); if (stt.done[e]) delete stt.done[e][k]; } }
+      else { stt.done[tid][itemKey] = true; if (it.step) { const [e, k] = it.step.split(':'); stt.done[e] = stt.done[e] || {}; stt.done[e][k] = true; } }
+    }, (was ? 'Untick trip ' : 'Paid trip ') + itemKey);
   }
 
   function viewPlan() {
@@ -213,6 +275,7 @@
     const firstMonth = B.month(t) < B.month(plan.startDate) ? B.month(plan.startDate) : B.month(t);
     if (!showPast) list = list.filter(ev => B.month(ev.date) >= firstMonth || (ev.kind !== 'note' && !B.eventProgress(state, ev).complete));
     let h = '<section><h1>The plan</h1><p class="lead">Every payday and what it pays for. Tap a day to see and tick its steps.</p></section>';
+    (plan.trips || []).filter(tr => tr.end >= t).forEach(tr => { h += tripCard(tr); });
     h += '<div class="row"><div class="seg" role="group" aria-label="Show">' + ['all'].concat(Object.keys(plan.people)).map(k => '<button type="button" data-filter="' + k + '" aria-pressed="' + (planFilter === k) + '">' + (k === 'all' ? 'Both' : k) + '</button>').join('') + '</div>' +
       '<button type="button" class="btn ghost small" id="pastBtn">' + (showPast ? 'Hide earlier' : 'Show earlier') + '</button></div>';
     let cur = '';
@@ -251,7 +314,7 @@
     const t = today();
     spendMonth = spendMonth || B.month(t);
     const sum = B.summary(plan, state, events, spendMonth + '-15');
-    const cats = plan.budgets.map(b => [b.key, b.label]).concat([['other', 'Other (not in the budget)'], ['cardpay', 'Credit card payment']]);
+    const cats = B.budgetsFor(plan, B.month(t)).concat(plan.budgets.filter(b => !b.months && !B.budgetsFor(plan, B.month(t)).some(x => x.key === b.key))).map(b => [b.key, b.label]).concat([['other', 'Other (not in the budget)'], ['cardpay', 'Credit card payment']]);
     const myBudget = plan.budgets.find(b => b.who === me); const defaultCat = myBudget ? myBudget.key : plan.budgets[0].key;
     let h = '<section><h1>Spending</h1><p class="lead">Log what you spend. The app warns you before you go over a budget or past 50% on a card.</p></section>';
     h += '<form class="card" id="spendForm" autocomplete="off"><h2>Add spending</h2>' +
@@ -421,7 +484,7 @@
     const whoBtn = $('#whoBtn');
     whoBtn.textContent = me || 'Who are you?';
     whoBtn.className = 'who-btn ' + (me ? whoClass(me) : '');
-    document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
+    document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-current', b.dataset.tab === (tab === 'trip' ? 'plan' : tab) ? 'page' : 'false'));
     $('.tabs').hidden = tab === 'setup';
     const v = $('#view');
     if (tab === 'setup' || !plan) v.innerHTML = viewSetup();
@@ -429,6 +492,7 @@
     else if (tab === 'spend') v.innerHTML = viewSpend();
     else if (tab === 'cards') v.innerHTML = viewCards();
     else if (tab === 'settings') v.innerHTML = viewSettings();
+    else if (tab === 'trip') v.innerHTML = viewTrip();
     else v.innerHTML = viewToday();
   }
 
@@ -450,6 +514,8 @@
       if (ok) mutate(st => { st.expenses = st.expenses.filter(x => x.id !== entry.id); }, 'Delete entry');
       return;
     }
+    if (t.dataset.tripItem) return toggleTripItem(t.dataset.trip, t.dataset.tripItem);
+    if (t.dataset.logcat) { const c = t.dataset.logcat, w = t.dataset.logwho; go('spend'); setTimeout(() => { $('#sCat').value = c; if (w) $('#sWho').value = w; $('#sAmt').focus(); }, 0); return; }
     if (t.dataset.cardpay) { go('spend'); setTimeout(() => { $('#sCat').value = 'cardpay'; $('#sWho').value = t.dataset.cardpay; $('#methodField').hidden = true; $('#sAmt').focus(); }, 0); return; }
     if (t.dataset.notify) { const w = t.dataset.notify; const on = state.notify[w] !== false; return mutate(st => { st.notify[w] = !on; }, (on ? 'Pause' : 'Resume') + ' notifications for ' + w); }
     if (t.dataset.me) { me = t.dataset.me; LS.set('me', me); return render(); }

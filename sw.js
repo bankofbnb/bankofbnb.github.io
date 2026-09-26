@@ -1,5 +1,5 @@
 /* Bank of B&B service worker: offline shell + push notifications. */
-const CACHE = 'bnb-v1';
+const CACHE = 'bnb-v2';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'engine.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

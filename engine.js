@@ -81,7 +81,7 @@
     }
     // notes (flight day etc.)
     (plan.notes || []).forEach(n => {
-      if (n.date <= end) events.push({ id: n.date + '|Both|' + (n.key || 'note'), date: n.date, who: 'Both', kind: 'note', title: n.title, text: n.text, steps: [] });
+      if (n.date <= end) events.push({ id: n.date + '|' + (n.who || 'Both') + '|' + (n.key || 'note'), date: n.date, who: n.who || 'Both', kind: 'note', title: n.title, text: n.text, trip: n.trip, steps: [] });
     });
 
     const kindOrder = { payday: 0, rent: 1, note: 2 };
@@ -105,6 +105,39 @@
     return events;
   }
 
+  // Budgets that apply in a month: trip-only budgets appear only in their months,
+  // and a budget can have a different amount for a given month (overrides).
+  function budgetsFor(plan, ym) {
+    return (plan.budgets || []).filter(b => !b.months || b.months.indexOf(ym) > -1).map(b => {
+      const o = b.overrides && b.overrides[ym];
+      return o == null ? Object.assign({}, b) : Object.assign({}, b, { monthly: o, note: b.overrideNote && b.overrideNote[ym] });
+    });
+  }
+
+  // ---- trips ----
+  function tripStatus(plan, state, trip, today) {
+    const id = 'trip|' + trip.key;
+    const d = state.done || {};
+    const items = (trip.items || []).map(it => {
+      // an item can be linked to a payday step ("2026-10-02|Prithvi:hullo"); ticking either counts
+      let done = !!(d[id] && d[id][it.key]);
+      if (it.step) { const [evId, k] = it.step.split(':'); done = done || !!(d[evId] && d[evId][k]); }
+      return Object.assign({}, it, { done });
+    });
+    const total = items.reduce((t, i) => t + i.amount, 0);
+    const paid = items.filter(i => i.done).reduce((t, i) => t + i.amount, 0);
+    const phase = today < trip.start ? 'before' : today <= trip.end ? 'during' : 'after';
+    const days = Math.round((parse(trip.start) - parse(today)) / 86400000);
+    const budgets = (trip.budgetKeys || []).map(k => {
+      const b = (plan.budgets || []).find(x => x.key === k); if (!b) return null;
+      const ym = (b.months && b.months[0]) || month(trip.start);
+      const bb = budgetsFor(plan, ym).find(x => x.key === k) || b;
+      const spent = (state.expenses || []).filter(e => e.cat === k && month(e.date) === ym).reduce((t, e) => t + Number(e.amount), 0);
+      return Object.assign({}, bb, { spent, left: bb.monthly - spent, pct: bb.monthly ? spent / bb.monthly : 0 });
+    }).filter(Boolean);
+    return { id, items, total, paid, done: items.filter(i => i.done).length, count: items.length, phase, days, budgets };
+  }
+
   // ---- activity summaries ----
   function isDone(state, ev, key) { return !!(state.done && state.done[ev.id] && state.done[ev.id][key]); }
   function eventProgress(state, ev) {
@@ -117,7 +150,7 @@
     const ym = month(today);
     const out = { month: ym, budgets: [], cards: {}, savingsDone: 0, savingsPlanned: 0, overdue: [], next: null };
     // budgets this month
-    for (const b of plan.budgets || []) {
+    for (const b of budgetsFor(plan, ym)) {
       const spent = (state.expenses || []).filter(e => e.cat === b.key && month(e.date) === ym).reduce((t, e) => t + Number(e.amount), 0);
       out.budgets.push(Object.assign({}, b, { spent, left: b.monthly - spent, pct: b.monthly ? spent / b.monthly : 0 }));
     }
@@ -198,5 +231,5 @@
     return out;
   }
 
-  return { parse, iso, addDays, addMonths, month, nice, monthName, money, todayIn, hourIn, buildEvents, isDone, eventProgress, summary, alerts, stepLine, notificationsFor };
+  return { parse, iso, addDays, addMonths, month, nice, monthName, money, todayIn, hourIn, buildEvents, isDone, eventProgress, summary, alerts, stepLine, notificationsFor, budgetsFor, tripStatus };
 });
