@@ -87,7 +87,23 @@
     const kindOrder = { payday: 0, rent: 1, note: 2 };
     events.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : kindOrder[a.kind] - kindOrder[b.kind]);
 
-    // running balances (planned)
+    // edited amounts: a one-off edit for one payday beats a "from this date on" change, which beats the plan
+    const st = opts.state || {};
+    const actual = st.actual || {};
+    const changes = (st.changes || []).slice().sort((a, b) => a.from < b.from ? -1 : 1);
+    for (const ev of events) {
+      for (const s of ev.steps) {
+        if (s.type === 'keep' || s.type === 'save') continue;
+        s.planned = s.amount;
+        const ch = changes.filter(c => c.who === ev.who && c.key === s.key && c.from <= ev.date).pop();
+        if (ch) { s.amount = ch.amount; s.changed = 'future'; s.changeFrom = ch.from; }
+        const a = actual[ev.id] && actual[ev.id][s.key];
+        if (a != null) { s.amount = a; s.changed = 'once'; }
+        if (s.amount === s.planned) delete s.changed;
+      }
+    }
+
+    // running balances
     const bal = {}; Object.keys(plan.people).forEach(w => bal[w] = 0);
     let savings = 0;
     for (const ev of events) {
@@ -95,7 +111,13 @@
         const w = ev.who;
         if (s.type === 'in') bal[w] += s.amount;
         else if (s.type === 'out') bal[w] -= s.amount;
-        else if (s.type === 'save') { s.amount = Math.max(0, bal[w]); savings += s.amount; bal[w] -= s.amount; }
+        else if (s.type === 'save') {
+          s.planned = Math.max(0, bal[w]);
+          const a = actual[ev.id] && actual[ev.id].save;
+          s.amount = a != null ? a : s.planned;
+          if (a != null && a !== s.planned) s.changed = 'once';
+          savings += s.amount; bal[w] -= s.amount;
+        }
         else if (s.type === 'keep') s.amount = bal[w];
         s.after = w in bal ? bal[w] : 0;
       }
@@ -122,7 +144,8 @@
       // an item can be linked to a payday step ("2026-10-02|Prithvi:hullo"); ticking either counts
       let done = !!(d[id] && d[id][it.key]);
       if (it.step) { const [evId, k] = it.step.split(':'); done = done || !!(d[evId] && d[evId][k]); }
-      return Object.assign({}, it, { done });
+      const ta = state.tripAmounts && state.tripAmounts[trip.key] && state.tripAmounts[trip.key][it.key];
+      return Object.assign({}, it, { done, planned: it.amount, amount: ta != null ? ta : it.amount, changed: ta != null && ta !== it.amount });
     });
     const total = items.reduce((t, i) => t + i.amount, 0);
     const paid = items.filter(i => i.done).reduce((t, i) => t + i.amount, 0);

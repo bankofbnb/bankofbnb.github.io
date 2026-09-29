@@ -55,7 +55,7 @@
     return j.content.sha;
   }
   function blankState() { return { version: 1, done: {}, expenses: [], cardStart: {}, notify: {}, subs: {} }; }
-  function normState(s) { s = s || blankState(); ['done', 'cardStart', 'notify', 'subs'].forEach(k => { if (!s[k] || typeof s[k] !== 'object') s[k] = {}; }); if (!Array.isArray(s.expenses)) s.expenses = []; return s; }
+  function normState(s) { s = s || blankState(); ['done', 'cardStart', 'notify', 'subs', 'actual', 'tripAmounts'].forEach(k => { if (!s[k] || typeof s[k] !== 'object') s[k] = {}; }); if (!Array.isArray(s.expenses)) s.expenses = []; if (!Array.isArray(s.changes)) s.changes = []; return s; }
 
   // Apply a change: optimistic locally, then write to GitHub, re-applying on conflict.
   async function mutate(fn, message) {
@@ -85,12 +85,12 @@
       const [p, s] = await Promise.all([readFile('plan.json'), readFile('state.json')]);
       if (!p.data) throw Object.assign(new Error('plan.json not found'), { status: 404 });
       plan = p.data; state = normState(s.data); stateSha = s.sha;
-      events = B.buildEvents(plan);
+      events = B.buildEvents(plan, { state });
       LS.set('cache', { plan, state });
       if (tab === 'setup') tab = 'today';
     } catch (e) {
       const cache = LS.get('cache', null);
-      if (cache && !plan) { plan = cache.plan; state = normState(cache.state); events = B.buildEvents(plan); }
+      if (cache && !plan) { plan = cache.plan; state = normState(cache.state); events = B.buildEvents(plan, { state }); }
       if (!quiet) showBanner(e.status === 401 ? 'The GitHub token was refused. Enter a new one in Alerts > Connection.' : e.status === 404 ? 'Could not find the data repo. Check the owner and repo name in Alerts > Connection.' : 'Offline. Showing the last saved copy.');
       if (!plan) tab = 'setup';
     }
@@ -126,18 +126,89 @@
   }
 
   // ---------- step rendering ----------
+  const pencil = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>';
+  function changedNote(s) {
+    if (!s.changed) return '';
+    return '<span class="was">' + (s.changed === 'future' ? 'Changed from ' + esc(B.nice(s.changeFrom, false)) + ' on · plan ' : 'Edited · plan ') + money(s.planned) + '</span>';
+  }
   function stepHtml(ev, s, i) {
     if (s.type === 'in') {
-      return '<li><div class="step info"><span class="box"></span><span class="label">Paycheck arrives</span><span class="amt" style="color:var(--good)">+' + money(s.amount) + '</span></div></li>';
+      return '<li class="step-row"><div class="step info"><span class="box"></span><span class="label">Paycheck arrives' + changedNote(s) + '</span><span class="amt" style="color:var(--good)">+' + money(s.amount) + '</span></div>' +
+        '<button type="button" class="edit-btn" data-edit-ev="' + esc(ev.id) + '" data-edit-key="pay" aria-label="Edit paycheck amount">' + pencil + '</button></li>';
     }
     const done = B.isDone(state, ev, s.key);
-    const cls = ['step', done ? 'done' : '', s.big ? 'big' : '', s.type].join(' ');
-    const amt = s.type === 'save' ? money(s.amount) : s.type === 'keep' ? money(s.amount) + ' left' : money(s.amount);
-    return '<li><button type="button" class="' + cls + '" data-ev="' + esc(ev.id) + '" data-key="' + esc(s.key) + '" aria-pressed="' + done + '">' +
+    const cls = ['step', done ? 'done' : '', s.big ? 'big' : '', s.type, s.changed ? 'changed' : ''].join(' ');
+    const amt = s.type === 'keep' ? money(s.amount) + ' left' : money(s.amount);
+    const editable = s.type !== 'keep';
+    return '<li class="step-row"><button type="button" class="' + cls + '" data-ev="' + esc(ev.id) + '" data-key="' + esc(s.key) + '" aria-pressed="' + done + '">' +
       '<span class="box">' + check + '</span>' +
-      '<span class="label"><span class="num">' + i + '.</span>' + esc(s.label) + (s.hint ? '<span class="hint">' + esc(s.hint) + '</span>' : '') + '</span>' +
-      '<span class="amt">' + amt + '</span></button></li>';
+      '<span class="label"><span class="num">' + i + '.</span>' + esc(s.label) + (s.hint ? '<span class="hint">' + esc(s.hint) + '</span>' : '') + changedNote(s) + '</span>' +
+      '<span class="amt">' + amt + '</span></button>' +
+      (editable ? '<button type="button" class="edit-btn" data-edit-ev="' + esc(ev.id) + '" data-edit-key="' + esc(s.key) + '" aria-label="Edit amount for ' + esc(s.label) + '">' + pencil + '</button>' : '<span class="edit-spacer" title="Worked out automatically"></span>') +
+      '</li>';
   }
+
+  // ---------- editing amounts ----------
+  const RECURRING_TYPES = { out: 1, in: 1 };
+  async function editStepAmount(evId, key) {
+    const ev = events.find(e => e.id === evId); if (!ev) return;
+    const s = ev.steps.find(x => x.key === key); if (!s) return;
+    const oneOffKey = (plan.oneOff || []).some(o => o.date === ev.date && o.who === ev.who && o.key === key);
+    const canRepeat = RECURRING_TYPES[s.type] && !oneOffKey && ev.kind !== 'note';
+    const label = s.type === 'in' ? 'Paycheck' : s.type === 'save' ? 'Moved to savings' : s.label;
+    const body = '<p class="muted small">' + esc(B.nice(ev.date)) + ' · ' + esc(ev.who) + ' · plan ' + money(s.planned) + '</p>' +
+      '<div class="field"><label for="editAmt">Actual amount</label><div class="money-input"><span>$</span><input id="editAmt" type="number" inputmode="decimal" min="0" step="0.01" value="' + s.amount + '"></div></div>' +
+      (canRepeat ? '<div class="field"><span class="lab">Apply to</span><div class="choice"><label><input type="radio" name="editScope" value="once" checked> Just this ' + (ev.kind === 'rent' ? 'month' : 'payday') + '</label><label><input type="radio" name="editScope" value="future"> This and every one after it</label></div></div>' : '') +
+      '<p class="small muted">Everything after this updates automatically: what\'s left, savings, card totals and reminders.</p>';
+    const actions = [{ label: 'Cancel', cls: 'secondary', value: 'cancel' }, { label: 'Save', value: 'save' }];
+    if (s.changed) actions.unshift({ label: 'Back to plan (' + money(s.planned) + ')', cls: 'ghost', value: 'reset' });
+    setTimeout(() => { const i = $('#editAmt'); if (i) { i.focus(); i.select(); } }, 50);
+    const r = await modal('Edit: ' + label, body, actions);
+    if (!r || r === 'cancel') return;
+    if (r === 'reset') {
+      return mutate(st => {
+        if (st.actual[evId]) { delete st.actual[evId][key]; if (!Object.keys(st.actual[evId]).length) delete st.actual[evId]; }
+        if (s.changed === 'future') st.changes = st.changes.filter(c => !(c.who === ev.who && c.key === key && c.from === s.changeFrom));
+      }, 'Reset ' + key + ' ' + evId).then(ok => ok && toast('Back to the planned ' + money(s.planned) + '.'));
+    }
+    const v = Math.round(parseFloat($('#editAmt').value) * 100) / 100;
+    if (!(v >= 0)) { toast('Enter an amount.'); return; }
+    const scopeEl = document.querySelector('input[name="editScope"]:checked');
+    const scope = scopeEl ? scopeEl.value : 'once';
+    const ok = await mutate(st => {
+      if (scope === 'future') {
+        st.changes = st.changes.filter(c => !(c.who === ev.who && c.key === key && c.from >= ev.date));
+        st.changes.push({ who: ev.who, key, from: ev.date, amount: v });
+        Object.keys(st.actual).forEach(id => { if (id >= ev.date && id.split('|')[1] === ev.who && st.actual[id][key] != null) { delete st.actual[id][key]; if (!Object.keys(st.actual[id]).length) delete st.actual[id]; } });
+      } else {
+        st.actual[evId] = st.actual[evId] || {};
+        st.actual[evId][key] = v;
+      }
+    }, 'Edit ' + key + ' ' + evId + ' to ' + v);
+    if (ok) {
+      const diff = v - s.amount;
+      toast(scope === 'future' ? label + ' is now ' + money(v) + ' from ' + B.nice(ev.date, false) + ' on.' : diff === 0 ? 'Saved.' : 'Saved. ' + (s.type === 'in' ? (diff > 0 ? money(diff) + ' more' : money(-diff) + ' less') + ' to work with.' : (diff > 0 ? money(diff) + ' more' : money(-diff) + ' less') + ' than planned.'));
+    }
+  }
+  async function editTripAmount(tripKey, itemKey) {
+    const tr = (plan.trips || []).find(x => x.key === tripKey); if (!tr) return;
+    const st0 = B.tripStatus(plan, state, tr, today());
+    const it = st0.items.find(x => x.key === itemKey); if (!it) return;
+    const body = '<p class="muted small">' + esc(it.who) + ' · plan ' + money(it.planned) + '</p><div class="field"><label for="editAmt">Actual amount</label><div class="money-input"><span>$</span><input id="editAmt" type="number" inputmode="decimal" min="0" step="0.01" value="' + it.amount + '"></div></div>' +
+      (it.step ? '<p class="small muted">This is paid from a payday step, so edit it there to change what\'s left in the account.</p>' : '');
+    const actions = [{ label: 'Cancel', cls: 'secondary', value: 'cancel' }, { label: 'Save', value: 'save' }];
+    if (it.changed) actions.unshift({ label: 'Back to plan (' + money(it.planned) + ')', cls: 'ghost', value: 'reset' });
+    setTimeout(() => { const i = $('#editAmt'); if (i) { i.focus(); i.select(); } }, 50);
+    const r = await modal('Edit: ' + it.label, body, actions);
+    if (!r || r === 'cancel') return;
+    const v = r === 'reset' ? null : Math.round(parseFloat($('#editAmt').value) * 100) / 100;
+    if (r !== 'reset' && !(v >= 0)) { toast('Enter an amount.'); return; }
+    await mutate(st => {
+      st.tripAmounts[tripKey] = st.tripAmounts[tripKey] || {};
+      if (v == null) delete st.tripAmounts[tripKey][itemKey]; else st.tripAmounts[tripKey][itemKey] = v;
+    }, 'Edit trip ' + itemKey);
+  }
+
   function stepsHtml(ev) {
     let n = 0;
     return '<ul class="steps">' + ev.steps.map(s => stepHtml(ev, s, s.type === 'in' ? 0 : ++n)).join('') + '</ul>';
@@ -240,8 +311,9 @@
     // 1. what it costs
     h += '<section class="card"><div class="row"><h2>1. What it costs</h2><span class="meter-val">' + money(st.paid) + ' of ' + money(st.total) + ' paid</span></div>' +
       '<p class="small muted" style="margin:4px 0 0">Tick each one when it\'s paid.</p><ul class="steps">' +
-      st.items.map(it => '<li><button type="button" class="step' + (it.done ? ' done' : '') + '" data-trip="' + esc(tr.key) + '" data-trip-item="' + esc(it.key) + '" aria-pressed="' + it.done + '"><span class="box">' + check + '</span>' +
-        '<span class="label">' + esc(it.label) + '<span class="hint"><span class="chip ' + whoClass(it.who) + '">' + esc(it.who) + '</span> · ' + esc(it.when) + ' · ' + esc(it.from) + '</span></span><span class="amt">' + money(it.amount) + '</span></button></li>').join('') +
+      st.items.map(it => '<li class="step-row"><button type="button" class="step' + (it.done ? ' done' : '') + (it.changed ? ' changed' : '') + '" data-trip="' + esc(tr.key) + '" data-trip-item="' + esc(it.key) + '" aria-pressed="' + it.done + '"><span class="box">' + check + '</span>' +
+        '<span class="label">' + esc(it.label) + '<span class="hint"><span class="chip ' + whoClass(it.who) + '">' + esc(it.who) + '</span> · ' + esc(it.when) + ' · ' + esc(it.from) + '</span>' + (it.changed ? '<span class="was">Edited · plan ' + money(it.planned) + '</span>' : '') + '</span><span class="amt">' + money(it.amount) + '</span></button>' +
+        '<button type="button" class="edit-btn" data-edit-trip="' + esc(tr.key) + '" data-edit-item="' + esc(it.key) + '" aria-label="Edit amount">' + pencil + '</button></li>').join('') +
       '</ul><div class="trip-total"><span>Total trip cost</span><b>' + money(st.total) + '</b></div></section>';
 
     // 2. timeline
@@ -491,6 +563,7 @@
 
   // ---------- render + events ----------
   function render() {
+    if (plan && state) events = B.buildEvents(plan, { state });
     const whoBtn = $('#whoBtn');
     whoBtn.textContent = me || 'Who are you?';
     whoBtn.className = 'who-btn ' + (me ? whoClass(me) : '');
@@ -514,6 +587,8 @@
     if (t.classList.contains('tab')) return go(t.dataset.tab);
     if (t.dataset.go) return go(t.dataset.go);
     if (t.id === 'whoBtn') return pickMe();
+    if (t.dataset.editEv) return editStepAmount(t.dataset.editEv, t.dataset.editKey);
+    if (t.dataset.editTrip) return editTripAmount(t.dataset.editTrip, t.dataset.editItem);
     if (t.classList.contains('step') && t.dataset.ev) return toggleStep(t.dataset.ev, t.dataset.key);
     if (t.dataset.filter) { planFilter = t.dataset.filter; return render(); }
     if (t.id === 'pastBtn') { showPast = !showPast; return render(); }
