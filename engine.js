@@ -75,7 +75,7 @@
     // rent
     if (plan.rent) {
       for (let d = plan.rent.firstDate; d <= end; d = addMonths(d, 1)) {
-        events.push({ id: d + '|' + plan.rent.who + '|rent', date: d, who: plan.rent.who, kind: 'rent', title: 'Rent day',
+        events.push({ id: d + '|' + plan.rent.who + '|rent', date: d, who: plan.rent.who, kind: 'rent', title: '🏢 Rent day',
           steps: [{ key: 'rent', type: 'out', label: plan.rent.label || 'Pay rent', amount: plan.rent.amount, confirm: true, big: true, order: 1 }] });
       }
     }
@@ -242,13 +242,13 @@
         const rest = ev.steps.filter(s => s.type !== 'in');
         out.push({ title: 'Payday: ' + money(pay.amount) + ' today', body: rest.map((s, i) => (i + 1) + '. ' + stepLine(s)).join('\n') + '\nTap to tick them off.', tag: ev.id });
       } else if (ev.kind === 'rent') {
-        out.push({ title: 'Rent day: ' + money(ev.steps[0].amount), body: 'Pay rent from your account today, then tick it off in the app.', tag: ev.id });
+        out.push({ title: '🏢 Rent day: ' + money(ev.steps[0].amount), body: 'Pay rent from your account today, then tick it off in the app.', tag: ev.id });
       } else if (ev.kind === 'note') {
         out.push({ title: ev.title, body: ev.text || '', tag: ev.id });
       }
     });
     events.filter(ev => ev.date === tomorrow && ev.kind === 'rent' && ev.who === who).forEach(ev => {
-      out.push({ title: 'Rent is due tomorrow', body: money(ev.steps[0].amount) + ' on ' + nice(ev.date) + '. Make sure it is in your account tonight.', tag: ev.id + '|eve' });
+      out.push({ title: '🏢 Rent is due tomorrow', body: money(ev.steps[0].amount) + ' on ' + nice(ev.date) + '. Make sure it is in your account tonight.', tag: ev.id + '|eve' });
     });
     alerts(plan, state, events, today).filter(a => a.who === who && a.level === 'bad').forEach(a => out.push({ title: a.title, body: a.text, tag: 'alert|' + a.title }));
     return out;

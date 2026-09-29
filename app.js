@@ -265,7 +265,7 @@
     const p = B.eventProgress(state, ev);
     const pay = ev.steps.find(s => s.type === 'in');
     return '<section class="card"><h3>' + esc(eyebrow) + '</h3>' +
-      '<div class="event-head" style="margin-top:8px"><div><div class="event-date">' + esc(B.nice(ev.date)) + '</div><div class="event-meta">' + whenText(ev.date) + ' · ' + esc(ev.kind === 'rent' ? 'Rent day' : ev.title) + '</div></div>' +
+      '<div class="event-head" style="margin-top:8px"><div><div class="event-date">' + esc(B.nice(ev.date)) + '</div><div class="event-meta">' + whenText(ev.date) + ' · ' + esc(ev.kind === 'rent' ? '🏢 Rent day' : ev.title) + '</div></div>' +
       '<div style="text-align:right"><span class="chip ' + whoClass(ev.who) + '">' + esc(ev.who) + '</span>' + (pay ? '<div class="pay-in" style="margin-top:8px">+' + money(pay.amount) + '</div>' : '') + '</div></div>' +
       '<div style="margin-top:12px" class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="' + p.total + '" aria-valuenow="' + p.done + '"><i style="width:' + (p.total ? (100 * p.done / p.total) : 0) + '%"></i></div>' +
       '<div class="small muted" style="margin-top:4px">' + p.done + ' of ' + p.total + ' done</div>' +
@@ -386,7 +386,7 @@
     let sub = ev.kind === 'note' ? esc(ev.text || '') : (pay ? '+' + money(pay.amount) + ' in · ' : '') + money(out) + ' out' + (save ? ' · ' + money(save.amount) + ' to savings' : keep ? ' · ' + money(keep.amount) + ' left' : '');
     const status = ev.kind === 'note' ? '' : p.complete ? '<span class="chip good">Done</span>' : ev.date < t ? '<span class="chip warn">' + (p.total - p.done) + ' left</span>' : '<span class="chip muted">' + p.done + '/' + p.total + '</span>';
     return '<details class="' + cls + '"' + (open ? ' open' : '') + '><summary><div class="d"><small>' + ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()] + '</small><b>' + d.getUTCDate() + '</b></div>' +
-      '<div class="mid"><span class="t">' + esc(ev.kind === 'rent' ? 'Rent · ' + money(ev.steps[0].amount) : ev.title) + '</span><span class="sub">' + sub + '</span></div>' +
+      '<div class="mid"><span class="t">' + esc(ev.kind === 'rent' ? '🏢 Rent · ' + money(ev.steps[0].amount) : ev.title) + '</span><span class="sub">' + sub + '</span></div>' +
       '<div class="right"><span class="chip ' + whoClass(ev.who) + '">' + esc(ev.who) + '</span>' + status + '</div></summary>' +
       (ev.kind === 'note' ? '' : '<div class="inner">' + stepsHtml(ev) + '<div class="bal">' + Object.keys(ev.balances).map(w => '<span>' + esc(w) + ' after: <b>' + money(ev.balances[w]) + '</b></span>').join('') + '<span>Savings: <b>' + money(ev.savings) + '</b></span></div></div>') +
       '</details>';
