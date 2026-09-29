@@ -276,3 +276,27 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .impact td { padding: 9px 0 9px 10px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
 .impact td:first-child { text-align: left; white-space: normal; padding-left: 0; }
 .impact td.down { color: var(--warn); font-weight: 700; }
+
+/* trip header */
+.back-btn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 14px 6px 8px; font-weight: 600; font-size: 14px; justify-self: start; }
+.back-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.trip-hero { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 18px; padding: 18px; display: grid; gap: 14px; }
+.trip-hero h1 { margin: 0; font-size: 28px; }
+.trip-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.count-pill { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 700; }
+.trip-dates { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
+.trip-dates > span:not(.trip-line) { display: grid; }
+.trip-dates > span:last-child { text-align: right; }
+.trip-dates b { font: 700 17px/1.2 var(--display); }
+.trip-dates small { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.trip-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.trip-line i { flex: 1; height: 2px; background: color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 2px; }
+.trip-line em { font-style: normal; font-size: 12.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.trip-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.trip-stats > div { background: var(--surface); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }
+.trip-stats small { color: var(--muted); font-size: 12px; font-weight: 600; }
+.trip-stats b { font: 700 19px/1.1 var(--display); }
+.trip-hero .progress { background: var(--surface); }
+.trip-verdict { margin: 0; display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; font-size: 14.5px; }
+.trip-verdict svg { width: 22px; height: 22px; fill: none; stroke: var(--good); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; background: var(--good-soft); border-radius: 50%; padding: 3px; }

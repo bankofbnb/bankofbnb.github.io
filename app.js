@@ -224,8 +224,18 @@
     const tr = (plan.trips || []).filter(x => x.end >= t)[0] || (plan.trips || []).slice(-1)[0];
     if (!tr) return '<div class="card empty">No trips planned.</div>';
     const st = B.tripStatus(plan, state, tr, t);
-    let h = '<section><button type="button" class="btn ghost small" data-go="plan" style="padding-left:0">← Plan</button><h1>' + esc(tr.name) + '</h1><p class="lead">' + esc(tripDates(tr)) + '</p></section>';
-    h += '<div class="verdict"><b>Can we afford it?</b><span>' + esc(tr.verdict) + '</span></div>';
+    const nights = Math.round((B.parse(tr.end) - B.parse(tr.start)) / 86400000);
+    const countdown = st.phase === 'before' ? (st.days === 0 ? 'Leaves today' : st.days === 1 ? 'Leaves tomorrow' : 'Leaves in ' + st.days + ' days') : st.phase === 'during' ? 'Away now · back ' + B.nice(tr.end, false) : 'Back home';
+    const left = st.total - st.paid;
+    let h = '<button type="button" class="back-btn" data-go="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Plan</button>';
+    h += '<section class="trip-hero">' +
+      '<div class="trip-top"><span class="eyebrow">Trip' + (tr.travelers ? ' · ' + tr.travelers.map(esc).join(' & ') : '') + '</span><span class="count-pill">' + esc(countdown) + '</span></div>' +
+      '<h1>' + esc(tr.name) + '</h1>' +
+      '<div class="trip-dates"><span><b>' + esc(B.nice(tr.start)) + '</b><small>Leaves</small></span><span class="trip-line" aria-hidden="true"><i></i><em>' + nights + ' nights</em><i></i></span><span><b>' + esc(B.nice(tr.end)) + '</b><small>Back</small></span></div>' +
+      '<div class="trip-stats"><div><small>Total</small><b>' + money(st.total) + '</b></div><div><small>Paid</small><b>' + money(st.paid) + '</b></div><div><small>Left to pay</small><b>' + money(left) + '</b></div></div>' +
+      '<div class="progress"><i style="width:' + (st.total ? 100 * st.paid / st.total : 0) + '%"></i></div>' +
+      '<p class="trip-verdict"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>' + esc(tr.verdict) + '</span></p>' +
+      '</section>';
 
     // 1. what it costs
     h += '<section class="card"><div class="row"><h2>1. What it costs</h2><span class="meter-val">' + money(st.paid) + ' of ' + money(st.total) + ' paid</span></div>' +
