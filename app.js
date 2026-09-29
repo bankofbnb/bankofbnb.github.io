@@ -235,8 +235,8 @@
       '</ul><div class="trip-total"><span>Total trip cost</span><b>' + money(st.total) + '</b></div></section>';
 
     // 2. timeline
-    const tl = [{ date: t < tr.start ? t : tr.start, title: 'Now', text: 'Buy the ferry tickets ($119) with your spare money.', who: 'Prithvi', now: true }]
-      .concat(events.filter(ev => ev.date >= B.addDays(tr.start, -6) && ev.date <= tr.end && (ev.trip === tr.key || (ev.kind === 'payday' && ev.steps.some(s => s.key === 'tripgas')))).map(ev => ({ date: ev.date, who: ev.who, title: ev.kind === 'payday' ? ev.who + '\'s payday' : ev.title, text: ev.kind === 'payday' ? (ev.steps.some(s => s.key === 'tripgas') ? 'Set aside $164 trip gas and buy the $44 Hullo ticket from this paycheck.' : 'Normal payday steps. Her $350 set-aside pays off the trip spending on her card.') : ev.text })));
+    const tl = (tr.nowText && t < tr.start ? [{ date: t, title: 'Now', text: tr.nowText, who: 'Both', now: true }] : [])
+      .concat(events.filter(ev => ev.date >= B.addDays(tr.start, -6) && ev.date <= tr.end && (ev.trip === tr.key || (ev.kind === 'payday' && ev.steps.some(s => s.key === 'tripgas')))).map(ev => ({ date: ev.date, who: ev.who, title: ev.kind === 'payday' ? ev.who + '\'s payday' : ev.title, text: ev.kind === 'payday' ? 'From this paycheck: ' + ev.steps.filter(s => s.key === 'tripgas' || s.key === 'hullo').map(s => s.label.replace(/^Vancouver trip: /, '') + ' (' + money(s.amount) + ')').join('; ') + '.' : ev.text })));
     h += '<section class="card"><h2>2. Day by day</h2><ol class="timeline">' + tl.map(x => '<li' + (x.date === t ? ' class="today"' : x.date < t && !x.now ? ' class="past"' : '') + '><span class="tl-date">' + (x.now ? 'Now' : esc(B.nice(x.date))) + '</span><div><b>' + esc(x.title) + '</b> <span class="chip ' + whoClass(x.who) + '">' + esc(x.who) + '</span><p>' + esc(x.text || '') + '</p></div></li>').join('') + '</ol></section>';
 
     // 3. spending during the trip
